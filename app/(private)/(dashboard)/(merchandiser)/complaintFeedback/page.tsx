@@ -1,0 +1,342 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Icon } from "@iconify-icon/react";
+
+import Table, { listReturnType, searchReturnType, TableDataType } from "@/app/components/customTable";
+import DismissibleDropdown from "@/app/components/dismissibleDropdown";
+import CustomDropdown from "@/app/components/customDropdown";
+import BorderIconButton from "@/app/components/borderIconButton";
+import { useSnackbar } from "@/app/services/snackbarContext";
+import { useLoading } from "@/app/services/loadingContext";
+import {
+  complaintFeedbackList,
+  exportCmplaintFeedback,
+} from "@/app/services/merchandiserApi";
+import { formatDate } from "../../(master)/salesTeam/details/[uuid]/page";
+import ImagePreviewModal from "@/app/components/ImagePreviewModal";
+import { usePagePermissions } from "@/app/(private)/utils/usePagePermissions";
+const dropdownDataList = [
+  { icon: "lucide:radio", label: "Inactive", iconWidth: 20 },
+  { icon: "lucide:delete", label: "Delete", iconWidth: 20 },
+];
+
+interface ComplaintFeedbackItem {
+  uuid: string;
+  code: string;
+  merchandiser: string;
+  customer: string;
+  feedback: string;
+}
+
+export default function Complaint() {
+  const { can, permissions } = usePagePermissions();
+  const { setLoading } = useLoading();
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [popupImages, setPopupImages] = useState<string[]>([]);
+  const [threeDotLoading, setThreeDotLoading] = useState<{ csv: boolean; xlsx: boolean; xslx: boolean }>({ csv: false, xlsx: false, xslx: false });
+  // Refresh table when permissions load
+  useEffect(() => {
+    if (permissions.length > 0) {
+      setRefreshKey((prev) => prev + 1);
+    }
+  }, [permissions]);
+
+  const router = useRouter();
+  const { showSnackbar } = useSnackbar();
+  const IMAGE_BASE_URL =
+    "https://api.coreexl.com/osa_developmentV2/public";
+
+  /* ================= IMAGE MODAL STATE ================= */
+  const [imageModal, setImageModal] = useState<{
+    images: string[];
+    index: number;
+  } | null>(null);
+
+  const openImageModal = (images: string[], index = 0) => {
+    setImageModal({ images, index });
+  };
+
+  const closeImageModal = () => {
+    setImageModal(null);
+  };
+
+  // Fetch Table Data
+  const fetchComplainedFeedback = useCallback(
+    async (pageNo = 1, pageSize = 50): Promise<listReturnType> => {
+      setLoading(true);
+      try {
+        const res = await complaintFeedbackList({
+          page: String(pageNo),
+          per_page: String(pageSize),
+        });
+        setLoading(false);
+
+        if (res.error) {
+          showSnackbar(
+            res.data?.message || "Failed to fetch Complaint Feedback list",
+            "error"
+          );
+          return { data: [], currentPage: 1, pageSize, total: 0 };
+        }
+
+        return {
+          data: res?.data || [],
+          currentPage: res?.pagination?.current_page,
+          pageSize: res?.pagination?.per_page,
+          total: res?.pagination?.last_page,
+        };
+      } catch (err) {
+        setLoading(false);
+        showSnackbar("Failed to fetch Complaint Feedback list", "error");
+        return { data: [], currentPage: 1, pageSize, total: 0 };
+      }
+    },
+    [setLoading, showSnackbar]
+  );
+
+  const handleExport = async (fileType: "csv" | "xlsx") => {
+    try {
+      // setLoading(true);
+      setThreeDotLoading((prev) => ({ ...prev, [fileType]: true }));
+      // ✅ Use correct API and param name
+      const res = await exportCmplaintFeedback({ format: fileType });
+
+      if (!res) {
+        showSnackbar("No data returned from server", "error");
+        return;
+      }
+
+      // ✅ Create blob for download
+      const blob = new Blob([res], {
+        type:
+          fileType === "csv"
+            ? "text/csv;charset=utf-8;"
+            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = `complaint_feedback_export.${fileType}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showSnackbar(
+        `Download started for ${fileType.toUpperCase()} file`,
+        "success"
+      );
+    } catch (error) {
+      console.error("Export error:", error);
+      showSnackbar("Failed to export complaint feedback data", "error");
+    } finally {
+      // setLoading(false);
+      setThreeDotLoading((prev) => ({ ...prev, [fileType]: false }));
+      setShowExportDropdown(false);
+    }
+  };
+
+  const searchComplaintFeedback = useCallback(
+    async (searchQuery: string): Promise<searchReturnType> => {
+      setLoading(true);
+      try {
+        // always start from page 1 for a new search
+        const res = await complaintFeedbackList({
+          search: searchQuery,
+        });
+
+        setLoading(false);
+        if (res.error) throw new Error(res.message || "Search failed");
+
+        const data: TableDataType[] = res.data.map((item: ComplaintFeedbackItem) => ({
+          id: item.uuid,
+          code: item.code,
+          merchandiser: item.merchandiser,
+          customer: item.customer,
+          feedback: item.feedback,
+        }));
+        return {
+          data: res?.data || [],
+          currentPage: res?.pagination?.current_page,
+          pageSize: res?.pagination?.per_page,
+          total: res?.pagination?.last_page,
+        };
+      } catch (err) {
+        setLoading(false);
+        showSnackbar((err as Error).message, "error");
+        return { data: [], total: 0, currentPage: 1, pageSize: 10 };
+      }
+    },
+    [setLoading, showSnackbar]
+  );
+
+  // Handle image popup open
+  //   const BASE_URL ="http://127.0.0.1:8000";
+  //   const handleOpenImagePopup = (row: any) => {
+  //     const images: string[] = [];
+  //  if (row.image?.image1) images.push(BASE_URL + row.image.image1);
+  //     if (row.image?.image2) images.push(BASE_URL + row.image.image2);
+  //     if (row.image?.image3) images.push(BASE_URL + row.image.image3);
+
+  //     if (images.length === 0) {
+  //       showSnackbar("No images available", "info");
+  //       return;
+  //     }
+
+  //     setPopupImages(images);
+  //   };
+
+  return (
+    <>
+      <div className="flex flex-col h-full">
+        <Table
+          refreshKey={refreshKey}
+
+          config={{
+            api: { list: fetchComplainedFeedback, search: searchComplaintFeedback },
+            header: {
+              title: "Complaint Feedback",
+
+              threeDot: [
+                {
+                  icon:  threeDotLoading.csv ? "eos-icons:three-dots-loading" : "gala:file-document",
+                  label: "Export CSV",
+                  onClick: (data: TableDataType[], selectedRow?: number[]) => {
+                    handleExport("csv")
+                  },
+                },
+                {
+                  icon: threeDotLoading.xlsx ? "eos-icons:three-dots-loading" : "gala:file-document",
+                  label: "Export Excel",
+                  onClick: (data: TableDataType[], selectedRow?: number[]) => {
+                    handleExport("xlsx")
+                  },
+                },
+
+              ],
+
+              searchBar: true,
+              columnFilter: true,
+              // actions: [
+              //   <SidebarBtn
+              //     key="add"
+              //     href="/merchandiser/complaintFeedback/add"
+              //     leadingIcon="lucide:plus"
+              //     label="Add Feedback"
+              //     labelTw="hidden lg:block"
+              //     isActive
+              //   />,
+              // ],
+            },
+            footer: { nextPrevBtn: true, pagination: true },
+            columns: [
+              { key: "complaint_code", label: "Complaint Code" },
+              { key: "created_at", label: "Date", render: (row) => formatDate(row.created_at) },
+              { key: "complaint_title", label: "Title" },
+              {
+                key: "merchendiser_code,merchendiser_name",
+                label: "Merchendiser",
+                render: (row) => `${row.merchendiser_code || ""} - ${row.merchendiser_name || ""}` || "-",
+              },
+              {
+                key: "customer_code,customer_name",
+                label: "Customer",
+                render: (row) => `${row.customer_code || ""} - ${row.customer_name || ""}` || "-",
+              },
+              {
+                key: "item_code,item_name",
+                label: "Item",
+                render: (row) => `${row.item_code || ""} - ${row.item_name || ""}` || "-",
+              },
+              { key: "type", label: "Type" },
+              { key: "complaint", label: "Complaint" },
+              {
+                key: "image",
+                label: "Images",
+                render: (row) => {
+                  const images =
+                    row?.image && typeof row.image === "object"
+                      ? Object.values(row.image)
+                        .filter((img): img is string => typeof img === "string")
+                        .map((img) => `${IMAGE_BASE_URL}${img}`)
+                      : [];
+
+
+                  if (images.length === 0) {
+                    return (
+                      <span className="text-gray-400">
+                        No images
+                      </span>
+                    );
+                  }
+
+                  return (
+                    <button
+                      onClick={() =>
+                        openImageModal(images, 0)
+                      }
+                      className="text-blue-600 font-medium hover:underline cursor-pointer"
+                    >
+                      View Images ({images.length})
+                    </button>
+                  );
+                },
+              },
+            ],
+            // rowSelection: true,
+            // rowActions: [
+            //   {
+            //     icon: "lucide:eye",
+            //     onClick: (data) => {
+            //       router.push(
+            //         `/complaintFeedback/view/${data.uuid}`
+            //       );
+            //     },
+            //   },
+            // ],
+            pageSize: 50,
+          }}
+        />
+        <ImagePreviewModal
+          images={imageModal?.images ?? []}
+          isOpen={!!imageModal}
+          onClose={closeImageModal}
+          startIndex={imageModal?.index ?? 0}
+        />
+      </div>
+
+      {popupImages.length > 0 && (
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-black/60 z-50 "
+          onClick={() => setPopupImages([])}
+        >
+          <div
+            className="bg-white rounded-xl p-4 max-w-[80%] max-h-[80%] overflow-auto shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap gap-4 justify-center">
+              {popupImages.map((img, idx) => (
+                <img
+                  key={idx}
+                  src={img}
+                  alt={`Image ${idx + 1}`}
+                  className="w-[200px] h-[200px] object-cover rounded-lg shadow-md"
+                />
+              ))}
+            </div>
+            <button
+              onClick={() => setPopupImages([])}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

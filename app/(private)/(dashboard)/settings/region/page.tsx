@@ -1,0 +1,249 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { Icon } from "@iconify-icon/react";
+import { useRouter } from "next/navigation";
+import DismissibleDropdown from "@/app/components/dismissibleDropdown";
+import CustomDropdown from "@/app/components/customDropdown";
+import BorderIconButton from "@/app/components/borderIconButton";
+import Table, { TableDataType, listReturnType } from "@/app/components/customTable";
+import SidebarBtn from "@/app/components/dashboardSidebarBtn";
+import { regionList, deleteRegion } from "@/app/services/allApi";
+import { useLoading } from "@/app/services/loadingContext";
+import DeleteConfirmPopup from "@/app/components/deletePopUp";
+import { useSnackbar } from "@/app/services/snackbarContext";
+import StatusBtn from "@/app/components/statusBtn2";
+
+interface RegionItem {
+  id?: number | string;
+  region_code?: string;
+  region_name?: string;
+  status?: number | "Active" | "Inactive";
+  company?: {
+    id?: number;
+    company_name?: string;
+    company_code?: string;   // ✅ Add country_code
+  };
+}
+const dropdownDataList = [
+  // { icon: "lucide:layout", label: "SAP", iconWidth: 20 },
+  // { icon: "lucide:download", label: "Download QR Code", iconWidth: 20 },
+  // { icon: "lucide:printer", label: "Print QR Code", iconWidth: 20 },
+  { icon: "lucide:radio", label: "Inactive", iconWidth: 20 },
+  { icon: "lucide:delete", label: "Delete", iconWidth: 20 },
+];
+
+export default function Region() {
+  const { setLoading } = useLoading();
+  const [regions, setRegions] = useState<RegionItem[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showDeletePopup, setShowDeletePopup] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<RegionItem | null>(null);
+
+  const router = useRouter();
+  const { showSnackbar } = useSnackbar();
+
+  type TableRow = TableDataType & { id?: string };
+
+  // Normalize API data for table
+const tableData: TableDataType[] = regions.map((s) => ({
+  id: s.id?.toString() ?? "",
+  region_code: s.region_code ?? "",
+  region_name: s.region_name ?? "",
+  company_name: s.company?.company_name ?? "",
+  company_code: s.company?.company_code ?? "",
+  status: s.status === 1 || s.status === "Active" ? "Active" : "Inactive",
+}));
+
+  // async function fetchRegions() {
+  //     const listRes = await regionList();
+  //     if(listRes.error) {
+  //       showSnackbar("Failed to fetch Regions ❌", "error");
+  //     } else {
+  //       setRegions(listRes.data);
+  //     }
+  //     setLoading(false);
+  //   };
+
+
+
+  const fetchRegions = useCallback(
+    async (
+      page: number = 1,
+      pageSize: number = 5
+    ): Promise<listReturnType> => {
+      try {
+        setLoading(true);
+        const listRes = await regionList({
+          limit: pageSize.toString(),
+          page: page.toString(),
+        });
+        setLoading(false);
+        return {
+          data: listRes.data || [],
+          total: listRes.pagination.totalPages,
+          currentPage: listRes.pagination.page,
+          pageSize: listRes.pagination.limit,
+        };
+      } catch (error: unknown) {
+        console.error("API Error:", error);
+        setLoading(false);
+        throw error;
+      }
+    },
+    []
+  );
+
+  // global search removed: use column filters and list API only
+
+  const handleConfirmDelete = async () => {
+    if (!selectedRow?.id) return;
+
+    const res = await deleteRegion(String(selectedRow.id));
+    if (res.error) {
+      showSnackbar(res.data.message || "Failed to delete Region", "error");
+    } else {
+      showSnackbar(res.message || "Region deleted successfully", "success");
+      setLoading(false);
+    }
+    setShowDeletePopup(false);
+  };
+
+  useEffect(() => {
+    setLoading(true);
+  }, []);
+
+
+  return (
+    <>
+
+
+      <div className="flex flex-col h-full">
+        <Table
+          config={{
+            api: {
+              list: fetchRegions,
+            },
+            header: {
+              title: "Region",
+              wholeTableActions: [
+                <div key={0} className="flex gap-[12px] relative">
+                  <BorderIconButton
+                    icon="ic:sharp-more-vert"
+                    onClick={() =>
+                      setShowDropdown(!showDropdown)
+                    }
+                  />
+
+                  {showDropdown && (
+                    <div className="w-[226px] absolute top-[40px] right-0 z-30">
+                      <CustomDropdown>
+                        {dropdownDataList.map(
+                          (
+                            link,
+                            index: number
+                          ) => (
+                            <div
+                              key={index}
+                              className="px-[14px] py-[10px] flex items-center gap-[8px] hover:bg-[#FAFAFA]"
+                            >
+                              <Icon
+                                icon={
+                                  link.icon
+                                }
+                                width={
+                                  link.iconWidth
+                                }
+                                className="text-[#717680]"
+                              />
+                              <span className="text-[#181D27] font-[500] text-[16px]">
+                                {link.label}
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </CustomDropdown>
+                    </div>
+                  )}
+                </div>
+              ],
+              // disable global search bar (use column filters only)
+              searchBar: false,
+              columnFilter: true,
+              actions: [
+                <SidebarBtn
+                  key="add-region"
+                  href="/settings/region/add"
+                  leadingIcon="lucide:plus"
+                  label="Add"
+                  labelTw="hidden lg:block"
+                  isActive
+                />,
+              ],
+            },
+            localStorageKey: "region-table",
+            footer: { nextPrevBtn: true, pagination: true },
+            columns: [
+              { key: "region_code", label: "Region Code",render: (row: TableDataType) => (
+            <span className="font-semibold text-[#181D27] text-[14px]">
+                {row.region_code}
+            </span>
+        ), },
+              { key: "region_name", label: "Region Name" },
+              
+
+              {
+    key: "company",
+    label: "Company",
+    render: (row: TableDataType) => {
+      const obj =
+        typeof row.company === "string"
+          ? JSON.parse(row.company)
+          : row.company;
+      return obj?.company_name || "-";
+    },
+  },
+
+              {
+                key: "status",
+                label: "Status",
+                render: (row: TableDataType) => (<StatusBtn isActive={row.status ? true : false} />),
+              },
+            ],
+            rowSelection: true,
+            rowActions: [
+              
+              {
+                icon: "lucide:edit-2",
+                onClick: (data: object) => {
+                  const row = data as TableRow;
+                  router.push(`/settings/region/${row.id}`);
+                },
+              },
+              // {
+              //   icon: "lucide:trash-2",
+              //   onClick: (data: object) => {
+              //     const row = data as TableRow;
+              //     setSelectedRow({ id: row.id });
+              //     setShowDeletePopup(true);
+              //   },
+              // },
+            ],
+            pageSize: 10,
+          }}
+        />
+      </div>
+
+      {/* Delete Popup */}
+      {showDeletePopup && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-50">
+          <DeleteConfirmPopup
+            title="Region"
+            onClose={() => setShowDeletePopup(false)}
+            onConfirm={handleConfirmDelete}
+          />
+        </div>
+      )}
+    </>
+  );
+}

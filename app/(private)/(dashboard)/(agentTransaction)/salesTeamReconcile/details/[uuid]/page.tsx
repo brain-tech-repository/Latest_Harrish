@@ -1,0 +1,173 @@
+"use client";
+
+import { useMemo, useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
+import ContainerCard from "@/app/components/containerCard";
+import Table, { TableDataType } from "@/app/components/customTable";
+import { Icon } from "@iconify-icon/react";
+import { salesTeamRecontionOrderByUuid } from "@/app/services/agentTransaction";
+import { useSnackbar } from "@/app/services/snackbarContext";
+import KeyValueData from "@/app/components/keyValueData";
+import { formatWithPattern } from "@/app/utils/formatDate";
+import { useLoading } from "@/app/services/loadingContext";
+import toInternationalNumber from "@/app/(private)/utils/formatNumber";
+import Link from "@/app/components/smartLink";
+
+export default function SalesmanLoadDetailsUI() {
+    const { setLoading } = useLoading();
+    const router = useRouter();
+    const params = useParams();
+    const { showSnackbar } = useSnackbar();
+
+    /* -------- FORM STATE -------- */
+    const [form, setForm] = useState({
+        warehouse: "",
+        salesman: "",
+        reconsile_date: "",
+    });
+
+    /* -------- PAYMENT STATE -------- */
+    const [payment, setPayment] = useState({
+        total: "",
+        cash: "",
+        credit: "",
+    });
+
+    /* -------- ITEM TABLE STATE -------- */
+    const [itemData, setItemData] = useState<TableDataType[]>([]);
+
+    /* -------- FETCH DATA -------- */
+    useEffect(() => {
+        const fetchDetails = async () => {
+            if (!params?.uuid) return;
+
+            try {
+                setLoading(true);
+                const res = await salesTeamRecontionOrderByUuid(String(params?.uuid));
+
+                if (res?.data) {
+                    const d = res.data;
+                    setForm({
+                        warehouse: `${d.warehouse_code} - ${d.warehouse_name || ""}`,
+                        salesman: `${d.salesman_code} - ${d.salesman_name || ""}`,
+                        reconsile_date: formatWithPattern(
+                                  new Date(d.reconsile_date),
+                                  "DD MMM YYYY",
+                                  "en-GB",
+                                ).toLowerCase(),
+                    });
+
+                    setPayment({
+                        total: String(d.grand_total_amount || 0),
+                        cash: String(d.cash_amount || 0),
+                        credit: String(d.credit_amount || 0),
+                    });
+
+                    if (Array.isArray(d.items)) {
+                        setItemData(d.items.map((item: any) => ({
+                            id: item.item_id,
+                            name: `${item.erp_code} - ${item.item_name || ""}`,
+                            load_qty: item.load_qty,
+                            unload_qty: item.unload_qty,
+                            invoice_qty: item.invoice_qty,
+                            item_code: item.erp_code, // Store erp_code as item_code for display if needed
+                            // ...item 
+                        })));
+                    }
+                }
+                setLoading(false);
+            } catch (err) {
+                console.error("Failed to fetch details", err);
+                showSnackbar("Failed to load details", "error");
+            }
+        };
+
+        fetchDetails();
+    }, [params?.uuid, showSnackbar]);
+
+    /* -------- MEMOIZED TABLE DATA -------- */
+    const tableData = useMemo(() => {
+        return itemData.map((row, idx) => ({
+            ...row,
+            idx,
+        }));
+    }, [itemData]);
+
+
+
+    return (
+        <div className="flex flex-col">
+            {/* -------- HEADER -------- */}
+            <Link href="/salesTeamRecosite" back className="flex items-center gap-4 mb-5">
+                <Icon
+                    icon="lucide:arrow-left"
+                    width={24}
+                />
+            </Link>
+                <h1 className="text-[20px] font-semibold text-[#181D27]">
+                    Sales Team Reconciliation Details
+                </h1>
+
+            <div className="flex flex-col gap-6">
+                <div className="flex flex-wrap gap-4">
+                    <ContainerCard className="w-full lg:w-[48%]">
+                        <KeyValueData
+                            data={[
+                                { value: form.warehouse, key: "Distributor" },
+                                { value: form.salesman, key: "Sales Team" },
+                                { value: form.reconsile_date, key: "Date" },
+                            ]}
+                        />
+                    </ContainerCard>
+
+                    <ContainerCard className="w-full lg:w-[48%]">
+                        <KeyValueData
+                            data={[
+                                { value: toInternationalNumber(payment.total), key: "Total Amount" },
+                                { value: toInternationalNumber(payment.cash), key: "Cash" },
+                                { value: toInternationalNumber(payment.credit), key: "Credit" },
+                            ]}
+                        />
+                    </ContainerCard>
+                </div>
+
+                <ContainerCard className="rounded-[10px]">
+                    {/* -------- TABLE -------- */}
+                    <Table
+                        data={tableData}
+                        config={{
+                            table: { height: 400 },
+                            columns: [
+                                {
+                                    key: "item",
+                                    label: "Item Name",
+                                    render: (row: any) => row.name,
+                                },
+                                {
+                                    key: "load_qty",
+                                    label: "Load Qty",
+                                    render: (row: any) => row.load_qty,
+                                },
+                                {
+                                    key: "unload_qty",
+                                    label: "Unload Qty",
+                                    render: (row: any) => row.unload_qty,
+                                },
+                                {
+                                    key: "invoice_qty",
+                                    label: "Invoice Qty",
+                                    render: (row: any) => row.invoice_qty,
+                                },
+                            ],
+                            pageSize: 100,
+                        }}
+                    />
+
+                    {/* -------- ACTIONS -------- */}
+
+                    
+                </ContainerCard>
+            </div>
+        </div>
+    );
+}

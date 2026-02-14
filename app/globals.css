@@ -1,0 +1,157 @@
+@import "tailwindcss";
+@plugin 'tailwind-scrollbar';
+@custom-variant dark (&:where(.dark, .dark *));
+
+
+
+
+body {
+  margin: 0;
+  padding: 0;
+  /* box-sizing:border-box; */
+  font-family: "Twemoji Country Flags", "Inter", sans-serif;
+  line-height: 20px;
+  /* user-select: none; */
+}
+
+:root {
+  --primary-color: #3b82f6;
+  /* Tailwind blue-500 as default */
+}
+
+.dark {
+  --primary-color: #2563eb;
+  /* Tailwind blue-600 for dark mode */
+}
+
+@theme {
+  --color-primary: #414651;
+  --color-primary-bold: #181D27;
+  --color-secondary: #535862;
+  --color-text-primary: #252b37;
+  --color-text-secondary: #414651;
+}
+
+.layoutTheme {
+  --primary-btn-color: #EA0A2A;
+  --secondary-btn-color: #FFF0F2;
+  --primary-btn-text-color: #FFFFFF;
+  --secondary-btn-text-color: #EA0A2A;
+  --primary-btn-border-color: #EA0A2A;
+  --secondary-btn-border-color: #EA0A2A;
+  --text-primary-color: #181D27;
+  /* --text-secondary-color: #535862; */
+  --text-secondary-color: #535862;
+  --bg-color: #FFF;
+}
+
+.layoutTheme2 {
+  --primary-btn-color: #1E40AF;
+  --secondary-btn-color: #ccd9f7;
+  --primary-btn-text-color: #FFFFFF;
+  --secondary-btn-text-color: #1E40AF;
+  --text-primary-color: #252B37;
+  --text-secondary-color: #F5F5F5;
+  --bg-color: #0d0d0d;
+}
+
+
+/* Loader spin keyframes used by Tailwind-based loader component */
+@keyframes spin-clock {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spin-anticlock {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.loader-spin {
+  animation: spin-clock 1s linear infinite;
+}
+
+.loader-spin-reverse {
+  animation: spin-anticlock 0.85s linear infinite;
+}
+
+.leaflet-routing-container {
+  display: none !important;
+}
+
+/* Fixing Outline Problem in charts */
+:focus {
+  outline: none !important;
+}
+
+.recharts-wrapper,
+.recharts-surface,
+.recharts-layer,
+.recharts-sector,
+.recharts-rectangle,
+.recharts-curve {
+  outline: none !important;
+}
+
+/* Highcharts specific fixes */
+.highcharts-container,
+.highcharts-root,
+.highcharts-tracker {
+  outline: none !important;
+}
+
+.search-bar-big {
+  padding: 50px 0px;
+
+  label {
+    text-align: center;
+    margin-bottom: 10px;
+    font-size: 21px;
+    font-weight: 600;
+    display: block;
+  }
+  .search-box{
+    min-height: 450px;
+    
+    >.w-full{
+      max-width: 586px;
+    }
+
+    .type-label {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 5px;
+      display: inline-block;
+      border-radius: 5px;
+      margin-bottom: 5px;
+      background-color: var(--status-active-bg, #ECFDF3); color: var(--status-active-text, #027A48);
+    }
+
+    .autosuggestion{
+      .list-li {
+        border-bottom: 1px solid #e5e7eb;
+
+        .phone-bl {
+          display: flex;
+          gap: 6px;
+          align-items: center;
+          color: #414651;
+        }
+      }
+    }
+
+    .inout-field {
+      height: 45px;
+    }
+  }
+}

@@ -1,0 +1,414 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
+import StatusBtn from "@/app/components/statusBtn2";
+import Table, {
+  configType,
+  listReturnType,
+  searchReturnType,
+  TableDataType,
+} from "@/app/components/customTable";
+import SidebarBtn from "@/app/components/dashboardSidebarBtn";
+import { capsCollectionList, exportCapsCollection, capsCollectionStatusUpdate,capsExportCollapse,capsGlobalFilter } from "@/app/services/agentTransaction";
+import { downloadFile } from "@/app/services/allApi";
+import { useSnackbar } from "@/app/services/snackbarContext"; // ✅ import snackbar
+import { useLoading } from "@/app/services/loadingContext";
+import { useAllDropdownListData } from "@/app/components/contexts/allDropdownListData";
+import ApprovalStatus from "@/app/components/approvalStatus";
+import { usePagePermissions } from "@/app/(private)/utils/usePagePermissions";
+import FilterComponent from "@/app/components/filterComponent";
+
+export default function SalemanLoad() {
+  const { can, permissions } = usePagePermissions();
+  const {  warehouseAllOptions,ensureWarehouseAllLoaded } = useAllDropdownListData();
+  const [filterPayload,setFilterPayload] = useState<any>();
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Refresh table when permissions load
+  useEffect(() => {
+    if (permissions.length > 0) {
+      setRefreshKey((prev) => prev + 1);
+    }
+  }, [permissions]);
+  const [warehouseId, setWarehouseId] = useState<string>("");
+  // Load dropdown data
+  useEffect(() => {
+    ensureWarehouseAllLoaded();
+  }, [ ensureWarehouseAllLoaded]);
+  const columns: configType["columns"] = [
+    { key: "code", label: "Code" },
+    // { key: "date", label: "Collection Date" },
+    {
+      key: "warehouse_code", label: "Distributors", render: (row: TableDataType) => {
+        const code = row.warehouse_code || "-";
+        const name = row.warehouse_name || "-";
+        return `${code}${code && name ? " - " : ""}${name}`;
+      },
+       filter: {
+            isFilterable: true,
+            width: 320,
+            filterkey: "warehouse_id",
+            options: Array.isArray(warehouseAllOptions) ? warehouseAllOptions : [],
+            onSelect: (selected: string | string[]) => {
+                setWarehouseId((prev) => (prev === selected ? "" : (selected as string)));
+            },
+            isSingle: false,
+            selectedValue: warehouseId,
+        },
+    },
+    {
+      key: "customer",
+      label: "Customer",
+      render: (row: TableDataType) => {
+        const code = row.customer_code ? row.customer_code : null;
+        const name = row.customer_name ? row.customer_name : null;
+
+        if (!code && !name) return "-";              // both null → show "-"
+        if (code && !name) return code;              // only code
+        if (!code && name) return name;              // only name
+
+        return `${code} - ${name}`;                  // both available
+      },
+    },
+    {
+        key: "approval_status",
+        label: "Approval Status",
+        showByDefault: false,
+        render: (row: TableDataType) => <ApprovalStatus status={row.approval_status || "-"} />,
+    },
+
+  ];
+
+  const { setLoading } = useLoading();
+  const router = useRouter();
+  const { showSnackbar } = useSnackbar();
+  const [threeDotLoading, setThreeDotLoading] = useState({
+    csv: false,
+    xlsx: false,
+  });
+  type TableRow = TableDataType & { id?: string };
+
+  // Cache for API results
+  const capsCollectionCache = useRef<{ [key: string]: any }>({});
+
+  // Helper to build cache key from params
+  const getCacheKey = (params: Record<string, string | number>) => {
+    return Object.entries(params).sort().map(([k, v]) => `${k}:${v}`).join("|");
+  };
+
+  // Memoize initial API result so it only loads once per mount/refreshKey
+  const [initialCapsData, setInitialCapsData] = useState<listReturnType | null>(null);
+  const [initialCapsParams, setInitialCapsParams] = useState<{ page: number, pageSize: number }>({ page: 1, pageSize: 50 });
+
+useEffect(() => {
+        setRefreshKey((k) => k + 1);
+      }, [warehouseId]);
+  useEffect(() => {
+    // Only fetch once per refreshKey
+    const fetchInitial = async () => {
+      const params:any = { page: initialCapsParams.page.toString(), per_page: initialCapsParams.pageSize.toString() };
+      // Pass warehouseId in params if set
+      if (warehouseId) {
+        params.warehouse_id = warehouseId;
+      }
+      const cacheKey = getCacheKey(params);
+      if (capsCollectionCache.current[cacheKey]) {
+        const listRes = capsCollectionCache.current[cacheKey];
+        setInitialCapsData({
+          data: Array.isArray(listRes.data) ? listRes.data : [],
+          total: listRes?.pagination?.totalPages || 1,
+          currentPage: listRes?.pagination?.page || 1,
+          pageSize: listRes?.pagination?.limit || initialCapsParams.pageSize,
+        });
+        return;
+      }
+      try {
+        setLoading(true);
+        const listRes = await capsCollectionList(params);
+        capsCollectionCache.current[cacheKey] = listRes;
+        setInitialCapsData({
+          data: Array.isArray(listRes.data) ? listRes.data : [],
+          total: listRes?.pagination?.totalPages || 1,
+          currentPage: listRes?.pagination?.page || 1,
+          pageSize: listRes?.pagination?.limit || initialCapsParams.pageSize,
+        });
+      } catch {
+        setInitialCapsData({
+          data: [],
+          total: 1,
+          currentPage: 1,
+          pageSize: 5,
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInitial();
+  }, [refreshKey, setLoading, warehouseId]);
+
+  // Table expects a function, so wrap the memoized result
+  const fetchSalesmanLoadHeader = useCallback(
+    async (page: number = 1, pageSize: number = 50): Promise<listReturnType> => {
+      // Only return memoized data if params match
+      if (page === initialCapsParams.page && pageSize === initialCapsParams.pageSize && initialCapsData) {
+        return initialCapsData;
+      }
+      // Otherwise, fetch and cache as before
+      const params = { page: page.toString(), per_page: pageSize.toString() };
+      const cacheKey = getCacheKey(params);
+      if (capsCollectionCache.current[cacheKey]) {
+        const listRes = capsCollectionCache.current[cacheKey];
+        return {
+          data: Array.isArray(listRes.data) ? listRes.data : [],
+          total: listRes?.pagination?.totalPages || 1,
+          currentPage: listRes?.pagination?.page || 1,
+          pageSize: listRes?.pagination?.limit || pageSize,
+        };
+      }
+      try {
+        setLoading(true);
+        const listRes = await capsCollectionList(params);
+        capsCollectionCache.current[cacheKey] = listRes;
+        return {
+          data: Array.isArray(listRes.data) ? listRes.data : [],
+          total: listRes?.pagination?.totalPages || 1,
+          currentPage: listRes?.pagination?.page || 1,
+          pageSize: listRes?.pagination?.limit || pageSize,
+        };
+      } catch (error: unknown) {
+        return {
+          data: [],
+          total: 1,
+          currentPage: 1,
+          pageSize: 5,
+        };
+      } finally {
+        setLoading(false);
+      }
+    }, [initialCapsData, initialCapsParams, setLoading]);
+
+  const exportListFile = async (format: string) => {
+    try {
+      const response = await exportCapsCollection({ format });
+      if (response && typeof response === 'object' && response.download_url) {
+        await downloadFile(response.download_url);
+        showSnackbar("File downloaded successfully ", "success");
+      } else {
+        showSnackbar("Failed to get download URL", "error");
+      }
+    } catch (error) {
+      showSnackbar("Failed to download distributor data", "error");
+    } finally {
+    }
+  };
+
+  //  const exportDetailsFile = async (format: string) => {
+  //    try {
+  //      const response = await exportCapsCollection({ format }); 
+  //      if (response && typeof response === 'object' && response.download_url) {
+  //       await downloadFile(response.download_url);
+  //        showSnackbar("File downloaded successfully ", "success");
+  //      } else {
+  //        showSnackbar("Failed to get download URL", "error");
+  //      }
+  //    } catch (error) {
+  //      showSnackbar("Failed to download warehouse data", "error");
+  //    } finally {
+  //    }
+  //  };
+
+  const exportFile = async (format: "csv" | "xlsx" = "csv") => {
+    try {
+      setThreeDotLoading((prev) => ({ ...prev, [format]: true }));
+      const response = await exportCapsCollection({ format,filter:filterPayload  });
+      if (response && typeof response === 'object' && response.download_url) {
+        await downloadFile(response.download_url);
+        showSnackbar("File downloaded successfully ", "success");
+      } else {
+        showSnackbar("Failed to get download URL", "error");
+      }
+      setThreeDotLoading((prev) => ({ ...prev, [format]: false }));
+    } catch (error) {
+      showSnackbar("Failed to download Salesman Load data", "error");
+      setThreeDotLoading((prev) => ({ ...prev, [format]: false }));
+    } finally {
+    }
+  };
+  const exportCollapseFile = async (format: "csv" | "xlsx" = "csv") => {
+    try {
+      setThreeDotLoading((prev) => ({ ...prev, [format]: true }));
+      const response = await capsExportCollapse({ format, filter: filterPayload });
+      if (response && typeof response === 'object' && response.download_url) {
+        await downloadFile(response.download_url);
+        showSnackbar("File downloaded successfully ", "success");
+      } else {
+        showSnackbar("Failed to get download URL", "error");
+      }
+      setThreeDotLoading((prev) => ({ ...prev, [format]: false }));
+    } catch (error) {
+      showSnackbar("Failed to download Salesman Load data", "error");
+      setThreeDotLoading((prev) => ({ ...prev, [format]: false }));
+    } finally {
+    }
+  };
+
+
+
+
+  // const filterBy = useCallback(
+  //   async (
+  //     payload: Record<string, string | number | null>,
+  //     pageSize: number
+  //   ): Promise<listReturnType> => {
+  //     const params: Record<string, string> = {};
+  //     Object.keys(payload || {}).forEach((k) => {
+  //       const v = payload[k as keyof typeof payload];
+  //       if (v !== null && typeof v !== "undefined" && String(v) !== "") {
+  //         params[k] = String(v);
+  //       }
+  //     });
+  //     const cacheKey = getCacheKey(params);
+  //     if (capsCollectionCache.current[cacheKey]) {
+  //       const result = capsCollectionCache.current[cacheKey];
+  //       const pagination = result.pagination?.pagination || result.pagination || {};
+  //       return {
+  //         data: result.data || [],
+  //         total: pagination.totalPages || result.pagination?.totalPages || 0,
+  //         totalRecords: pagination.totalRecords || result.pagination?.totalRecords || 0,
+  //         currentPage: pagination.current_page || result.pagination?.currentPage || 0,
+  //         pageSize: pagination.limit || pageSize,
+  //       };
+  //     }
+  //     setLoading(true);
+  //     let result;
+  //     try {
+  //       result = await capsCollectionList(params);
+  //       capsCollectionCache.current[cacheKey] = result;
+  //     } finally {
+  //       setLoading(false);
+  //     }
+
+  //     if (result?.error) throw new Error(result.data?.message || "Filter failed");
+  //     else {
+  //       const pagination = result.pagination?.pagination || result.pagination || {};
+  //       return {
+  //         data: result.data || [],
+  //         total: pagination.totalPages || result.pagination?.totalPages || 0,
+  //         totalRecords: pagination.totalRecords || result.pagination?.totalRecords || 0,
+  //         currentPage: pagination.current_page || result.pagination?.currentPage || 0,
+  //         pageSize: pagination.limit || pageSize,
+  //       };
+  //     }
+  //   },
+  //   [setLoading]
+  // );
+
+      const filterBy = useCallback(
+          async (
+              payload: Record<string, string | number | null>,
+              pageSize: number = 50,
+              pageNo?: number
+          ): Promise<listReturnType> => {
+              let result;
+              setLoading(true);
+              setFilterPayload(payload);
+              try {
+                  const body = {
+                      perPage: pageSize.toString(),
+                      currentPage: (pageNo ?? 1).toString(),
+                      filter: payload
+                  };
+                  result = await capsGlobalFilter(body);
+              } finally {
+                  setLoading(false);
+                  // setColFilter(false);
+              }
+  
+              if (result?.error) throw new Error(result.data?.message || "Filter failed");
+              else {
+                  const pagination = result.pagination?.pagination || result.pagination || {};
+                  return {
+                      data: result.data || [],
+                      total: pagination?.lastPage || result.pagination?.lastPage || 0,
+                      totalRecords: pagination?.total || result.pagination?.total || 0,
+                      currentPage: pagination?.currentPage || result.pagination?.currentPage || 0,
+                      pageSize: pagination?.perPage || pageSize,
+                  };
+              }
+          },
+          [setLoading]
+      );
+
+  return (
+    <div className="flex flex-col h-full">
+      <Table
+        refreshKey={refreshKey}
+        config={{
+          api: {
+            list: fetchSalesmanLoadHeader,
+            filterBy: filterBy,
+          },
+          header: {
+            title: "CAPS Master Collection",
+            threeDot: [
+              {
+                icon: threeDotLoading.csv ? "eos-icons:three-dots-loading" : "gala:file-document",
+                label: "Export CSV",
+                labelTw: "text-[12px] hidden sm:block",
+                onClick: () => !threeDotLoading.csv && exportFile("csv"),
+              },
+              {
+                icon: threeDotLoading.xlsx ? "eos-icons:three-dots-loading" : "gala:file-document",
+                label: "Export Excel",
+                labelTw: "text-[12px] hidden sm:block",
+                onClick: () => !threeDotLoading.xlsx && exportCollapseFile("xlsx"),
+              },
+            ],
+            columnFilter: true,
+            filterRenderer: (props) => (
+                                                                                                <FilterComponent
+                                                                                                currentDate={true}
+                                                                                                  {...props}
+                                                                                                />
+                                                                                              ),
+            searchBar: false,
+            actions: can("create") ? [
+              <SidebarBtn
+                key={0}
+                href="/capsCollection/add"
+                isActive
+                leadingIcon="lucide:plus"
+                label="Add"
+                labelTw="hidden sm:block"
+              />
+            ] : [],
+          },
+          footer: { nextPrevBtn: true, pagination: true },
+          columns,
+          localStorageKey: "agent-caps-collection-table",
+          rowSelection: true,
+          rowActions: [
+            {
+              icon: "lucide:eye",
+              onClick: (data: object) => {
+                const row = data as TableRow;
+                router.push(`/capsCollection/details/${row.uuid}`);
+              },
+            },
+            // {
+            //     icon: "lucide:edit-2",
+            //     onClick: (data: object) => {
+            //         const row = data as TableRow;
+            //         router.push(
+            //             `/capsCollection/${row.uuid}`
+            //         );
+            //     },
+            // },
+          ],
+          pageSize: 50,
+        }}
+      />
+    </div>
+  );
+}

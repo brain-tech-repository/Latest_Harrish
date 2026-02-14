@@ -1,0 +1,505 @@
+"use client";
+
+import ContainerCard from "@/app/components/containerCard";
+import { useAllDropdownListData } from "@/app/components/contexts/allDropdownListData";
+import Table, { TableDataType } from "@/app/components/customTable";
+import SidebarBtn from "@/app/components/dashboardSidebarBtn";
+import InputFields from "@/app/components/inputFields";
+import Logo from "@/app/components/logo";
+import {
+  salesmanUnloadHeaderAdd,
+  salesmanUnloadHeaderById,
+  salesmanUnloadHeaderUpdate,
+  salesmanUnloadData,
+  getUnloadSalesmanByRouteId,
+} from "@/app/services/agentTransaction";
+import { itemList } from "@/app/services/allApi";
+import { useLoading } from "@/app/services/loadingContext";
+import { useSnackbar } from "@/app/services/snackbarContext";
+import { Icon } from "@iconify-icon/react";
+import Link from "@/app/components/smartLink";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import * as yup from "yup";
+
+export default function AddEditSalesmanUnload() {
+  const {
+    salesmanTypeOptions,
+    routeOptions,
+    // salesmanOptions,
+    warehouseOptions,
+    fetchRouteOptions,
+    fetchSalesmanByRouteOptions,
+    projectOptions,
+    ensureProjectLoaded, ensureRouteLoaded, ensureSalesmanLoaded, ensureSalesmanTypeLoaded, ensureWarehouseLoaded } = useAllDropdownListData();
+
+  // Load dropdown data
+  useEffect(() => {
+    ensureProjectLoaded();
+    ensureRouteLoaded();
+    ensureSalesmanLoaded();
+    ensureSalesmanTypeLoaded();
+    ensureWarehouseLoaded();
+  }, [ensureProjectLoaded, ensureRouteLoaded, ensureSalesmanLoaded, ensureSalesmanTypeLoaded, ensureWarehouseLoaded]);
+
+  const router = useRouter();
+  const { showSnackbar } = useSnackbar();
+  const { setLoading } = useLoading();
+  const [nestedLoading, setNestedLoading] = useState(false);
+  const params = useParams();
+  const unloadUUID = params?.uuid as string | undefined;
+  const isEditMode = unloadUUID && unloadUUID !== "add";
+  const [skeleton, setSkeleton] = useState({
+    route: false,
+    salesman: false,
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({
+    salesman_type: "",
+    route_id: "",
+    warehouse: "",
+    salesman_id: "",
+    project_type: "",
+    unload_date: "",
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [itemData, setItemData] = useState<TableDataType[]>([]);
+  const [isItemsLoaded, setIsItemsLoaded] = useState(false);
+  const [salesmanOptions, setSalesmanOptions] = useState<any[]>([]);
+
+  // ✅ Fetch salesman unload data when date is selected
+  useEffect(() => {
+    if (form.unload_date && form.salesman_id && !isEditMode) {
+      (async () => {
+        try {
+          setNestedLoading(true);
+
+          // Pass the date to the API
+          const res = await salesmanUnloadData(Number(form.salesman_id), { date: form.unload_date });
+
+          const itemsArray = res?.data?.items || res?.data || res?.items || [];
+
+          if (Array.isArray(itemsArray) && itemsArray.length > 0) {
+            const data = itemsArray.map((item: any) => ({
+              item_id: item.item?.item_id || item.item_id || item.item_id,
+              erp_code: item.item?.erp_code || item.erp_code,
+              item_name: item.item?.item_name || item.item_name,
+              total_load: item.total_load || "",
+
+              unload_qty: item.unload_qty?.toString() || "0", // Default to "0" instead of empty
+              uom: item.uom || "",
+            }));
+            setItemData(data);
+            setIsItemsLoaded(true);
+          } else {
+            // If no data, reset to empty table
+            setItemData([]);
+            setIsItemsLoaded(true);
+            showSnackbar("No items found for selected date and sales team", "info");
+          }
+        } catch (error: any) {
+          console.error("Sales team Unload Data Error:", error);
+          console.error("Error details:", error?.response?.data);
+          showSnackbar(
+            error?.response?.data?.message || "Failed to fetch item data",
+            "error"
+          );
+          // Reset items on error
+          setItemData([]);
+          setIsItemsLoaded(false);
+        } finally {
+          setNestedLoading(false);
+        }
+      })();
+    } else if ((!form.unload_date || !form.salesman_id) && !isEditMode) {
+      // Reset items when date or salesman is deselected
+      setItemData([]);
+      setIsItemsLoaded(false);
+    }
+  }, [form.unload_date, form.salesman_id, isEditMode, setNestedLoading, showSnackbar]);
+
+
+  useEffect(() => {
+    if (form.route_id && !isEditMode) {
+      (async () => {
+        try {
+          setSkeleton((prev) => ({ ...prev, salesman: true }));
+          const res = await getUnloadSalesmanByRouteId({ route_id: form.route_id });
+          const data = res?.data ?? res;
+          const salesmanOptions = data.map((item: any) => ({
+            value: item.id,
+            label: `${item.osa_code} - ${item.name}`,
+          }));
+          setSalesmanOptions(salesmanOptions);
+        } catch (error) {
+          console.error("Fetch Error:", error);
+          showSnackbar("Failed to fetch salesman data", "error");
+        } finally {
+          setSkeleton((prev) => ({ ...prev, salesman: false }));
+        }
+      })();
+    }
+  }, [form.route_id, isEditMode, setSkeleton, showSnackbar]);
+
+  // ✅ Fetch data for edit mode
+  useEffect(() => {
+    if (isEditMode && unloadUUID && isItemsLoaded) {
+      (async () => {
+        try {
+          setLoading(true);
+          const res = await salesmanUnloadHeaderById(String(unloadUUID));
+          const data = res?.data ?? res;
+
+          setForm({
+            salesman_type: data?.salesman_type || "",
+            warehouse: data?.warehouse?.id?.toString() || "",
+            route_id: data?.route?.id?.toString() || "",
+            salesman_id: data?.salesman?.id?.toString() || "",
+            project_type:
+              data?.projecttype?.id?.toString() || data?.project_type || "",
+            unload_date: data?.unload_date || "",
+          });
+
+          if (data?.details && Array.isArray(data.details)) {
+            setItemData((prev) =>
+              prev.map((item) => {
+                const matched = data.details.find(
+                  (d: any) => d.item?.item_id === item.item_id
+                );
+                return matched
+                  ? {
+                    ...item,
+                    qty: matched.qty?.toString() || "",
+                  }
+                  : item;
+              })
+            );
+          }
+        } catch (error) {
+          console.error("Fetch Error:", error);
+          showSnackbar("Failed to fetch unload details", "error");
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }
+  }, [isEditMode, unloadUUID, isItemsLoaded, setLoading, showSnackbar]);
+
+  // ✅ Validation Schema
+  const validationSchema = yup.object().shape({
+    salesman_type: yup.string().required("Sales Team Type is required"),
+    route_id: yup.string().required("Route is required"),
+    warehouse: yup.string().required("Distributor is required"),
+    salesman_id: yup.string().required("Sales Team is required"),
+    unload_date: yup.string().required("Unload Date is required"),
+  });
+
+  const handleChange = (field: string, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+
+  const recalculateItem = (index: number, field: string, value: string) => {
+    const newData = [...itemData];
+    newData[index][field] = value;
+    setItemData(newData);
+  };
+
+  // ✅ Handle Submit (fully fixed)
+  const handleSubmit = async () => {
+    try {
+
+      await validationSchema.validate(form, { abortEarly: false });
+      setErrors({});
+      setSubmitting(true);
+
+      const details = itemData
+        .filter((i) => i.unload_qty && Number(i.unload_qty) > 0)
+        .map((i) => ({
+          item_id: i.item_id,
+          qty: String(i.unload_qty || "0"),
+          uom: i.uom,
+          // status: 1,
+        }));
+
+      if (details.length === 0) {
+        showSnackbar("Please enter quantity for at least one item.", "error");
+        setSubmitting(false);
+        return;
+      }
+
+      const payload = {
+        route_id: Number(form.route_id),
+        salesman_type: form.salesman_type,
+        warehouse_id: Number(form.warehouse),
+        project_type: form.project_type ? Number(form.project_type) : null,
+        salesman_id: Number(form.salesman_id),
+        unload_date: form.unload_date,
+        details,
+      };
+
+
+      const res = isEditMode
+        ? await salesmanUnloadHeaderUpdate(unloadUUID, payload)
+        : await salesmanUnloadHeaderAdd(payload);
+
+
+      if (res?.error) {
+        showSnackbar(res.data?.message || "Failed to submit form", "error");
+      } else {
+        showSnackbar(
+          isEditMode
+            ? "Salesman Unload updated successfully"
+            : "Salesman Unload added successfully",
+          "success"
+        );
+        router.push("/salesTeamUnload");
+      }
+    } catch (err: any) {
+      console.error("🔴 Submission Error:", err);
+      if (err instanceof yup.ValidationError) {
+        const formErrors: Record<string, string> = {};
+        err.inner.forEach((e) => {
+          if (e.path) formErrors[e.path] = e.message;
+        });
+        setErrors(formErrors);
+        showSnackbar("Please fill all required fields correctly.", "error");
+      } else {
+        showSnackbar("Failed to submit form. Check console.", "error");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-4">
+          <Link href="/salesTeamUnload" back>
+            <Icon icon="lucide:arrow-left" width={24} />
+          </Link>
+          <h1 className="text-xl font-semibold text-gray-900">
+            {isEditMode ? "Update Sales Team Unload" : "Add Sales Team Unload"}
+          </h1>
+        </div>
+      </div>
+
+      <ContainerCard className="rounded-[10px] scrollbar-none">
+        {/* --- Header Section --- */}
+        <div className="flex justify-between mb-10 flex-wrap gap-5">
+          <div className="flex flex-col gap-2.5">
+            <Logo type="full" />
+          </div>
+          <div className="flex items-end flex-col">
+            <span className=" text-[42px] uppercase text-[#A4A7AE] mb-2.5">
+              Unload
+            </span>
+            <span className="text-primary text-[14px] tracking-[10px]">
+              #UL0201
+            </span>
+          </div>
+        </div>
+
+        <hr className="w-full text-[#D5D7DA]" />
+
+        {/* --- Form Fields --- */}
+        <div className="flex flex-col sm:flex-row gap-4 mt-10 mb-10 flex-wrap">
+          <div className="flex flex-col w-full sm:w-[30%]">
+            <InputFields
+            required
+              label="Sales Team Type"
+              name="salesman_type"
+              value={form.salesman_type}
+              options={salesmanTypeOptions}
+              onChange={(e) => handleChange("salesman_type", e.target.value)}
+              error={errors.salesman_type}
+            />
+           
+          </div>
+
+          {/* Show Project List only when salesman_type id = 36 */}
+          {form.salesman_type === "6" && (
+            <div className="flex flex-col w-full sm:w-[30%]">
+              <InputFields
+              // required
+                label="Project List"
+                value={form.project_type}
+                options={projectOptions}
+                onChange={(e) => {
+                  handleChange("project_type", e.target.value)
+                  handleChange("warehouse", "");
+                  handleChange("route_id", "");
+                  handleChange("salesman_id", "");
+                  handleChange("unload_date", "");
+                }}
+              />
+            </div>
+          )}
+
+
+          <div className="flex flex-col w-full sm:w-[30%]">
+            <InputFields
+            required
+              searchable
+              label="Distributor"
+              name="warehouse"
+              value={form.warehouse}
+              options={warehouseOptions}
+              disabled={warehouseOptions.length === 0 || !form.salesman_type}
+              onChange={(e) => {
+                const val = e.target.value;
+                handleChange("warehouse", val);
+                handleChange("route_id", "");
+                handleChange("salesman_id", "");
+                handleChange("unload_date", "");
+                // handleChange("route_id", "");
+                if (val) {
+                  setSkeleton((prev) => ({ ...prev, route: true }));
+                  Promise.resolve(fetchRouteOptions(val)).finally(() => {
+                    setSkeleton((prev) => ({ ...prev, route: false }));
+                  });
+                }
+              }}
+              error={errors.warehouse}
+              placeholder="Select Distributor"
+            />
+            {/* {errors.warehouse && (
+              <p className="text-red-500 text-sm">{errors.warehouse}</p>
+            )} */}
+          </div>
+
+          <div className="flex flex-col w-full sm:w-[30%]">
+            <InputFields
+            required
+              label="Route"
+              name="route_id"
+              searchable
+              value={form.route_id}
+              options={routeOptions}
+              showSkeleton={skeleton.route}
+              disabled={routeOptions.length === 0 || !form.warehouse}
+              onChange={(e) => {
+                const val = e.target.value;
+                handleChange("route_id", val);
+                handleChange("salesman_id", "");
+                if (val) {
+                  // setSkeleton((prev) => ({ ...prev, salesman: true }));
+                  // Promise.resolve(getUnloadSalesmanByRouteId({ route_id: val })).then((res) => {
+                  //   const data = res?.data ?? res;
+                  //   setSalesmanOptions(data);
+                  // }).finally(() => {
+                  //   setSkeleton((prev) => ({ ...prev, salesman: false }));
+                  // });
+                }
+              }}
+              placeholder="Select Route"
+              error={errors.route_id}
+            />
+            {/* {errors.route_id && (
+              <p className="text-red-500 text-sm">{errors.route_id}</p>
+            )} */}
+          </div>
+
+          <div className="flex flex-col w-full sm:w-[30%]">
+            <InputFields
+            required
+              label="Sales Team"
+              name="salesman_id"
+              value={form.salesman_id}
+              options={salesmanOptions}
+              showSkeleton={skeleton.salesman}
+              searchable
+              disabled={salesmanOptions.length === 0 || !form.route_id}
+              onChange={(e) => handleChange("salesman_id", e.target.value)}
+              placeholder="Select Sales Team"
+              error={errors.salesman_id}
+            />
+            {/* {errors.salesman_id && (
+              <p className="text-red-500 text-sm">{errors.salesman_id}</p>
+            )} */}
+          </div>
+
+          <div className="flex flex-col w-full sm:w-[30%]">
+            <InputFields
+            required
+              label="Last load Date"
+              name="unload_date"
+              type="date"
+              disabled={!form.salesman_id}
+              value={form.unload_date}
+              onChange={(e) => handleChange("unload_date", e.target.value)}
+              error={errors.unload_date}
+            />
+            {/* {errors.unload_date && (
+              <p className="text-red-500 text-sm">{errors.unload_date}</p>
+            )} */}
+          </div>
+        </div>
+
+        {/* --- Table --- */}
+        <Table
+
+          data={itemData.map((row, idx) => ({ ...row, idx: idx.toString() }))}
+          config={{
+            showNestedLoading: nestedLoading,
+            table: { height: 500 },
+            columns: [
+              {
+                key: "item",
+                label: "Items",
+                render: (row) => (
+                  <span>
+                    {row.erp_code && row.item_name
+                      ? `${row.erp_code} - ${row.item_name}`
+                      : row.erp_code || row.item_name || "-"}
+                  </span>
+                ),
+              },
+              {
+                key: "total_load",
+                label: "PSC",
+                render: (row) => <span>{row.total_load || "-"}</span>
+              },
+              {
+                key: "unload_qty",
+                label: "Quantity",
+                render: (row) => (
+                  <span>{row.unload_qty || "0"}</span>
+                ),
+              },
+              // { 
+              //   key: "pcs", 
+              //   label: "PCS",
+              //   render: (row) => <span>{row.pcs || "-"}</span>
+              // },
+            ],
+          }}
+        />
+
+        <hr className="text-[#D5D7DA]" />
+        <div className="flex justify-end gap-4 mt-6">
+          <button
+            type="button"
+            className="px-6 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
+            onClick={() => router.push("/salesTeamUnload")}
+          >
+            Cancel
+          </button>
+          <SidebarBtn
+            isActive={!submitting}
+            disabled={submitting}
+            leadingIcon="mdi:check"
+            label={submitting
+              ? (isEditMode ? "Updating..." : "Submitting...")
+              : isEditMode
+                ? "Update Unload"
+                : "Create Unload"}
+            onClick={handleSubmit}
+          />
+        </div>
+      </ContainerCard>
+    </>
+  );
+}
