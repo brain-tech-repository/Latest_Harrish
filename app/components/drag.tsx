@@ -1579,9 +1579,27 @@ const SalesReportDashboard = (props: SalesReportDashboardProps) => {
   // const searchtype = availableFilters.filter(f => ['display-quantity', 'amount'].includes(f.id));
   // Show all moreFilters, but mark 'customer' as disabled unless 'channel-categories' or 'customer-category' is dropped
   const isCustomerEnabled = droppedFilters.some(f => f.id === 'channel-categories' || f.id === 'customer-category');
-  const moreFilters = reportType === 'item' ? [] : availableFilters.filter(f =>
-    !['company', 'region', 'area', 'warehouse', 'salesman', 'route', 'display-quantity', 'amount'].includes(f.id)
-  );
+const baseHiddenFilters = [
+  'company',
+  'region',
+  'area',
+  'warehouse',
+  'salesman',
+  'route',
+  'display-quantity',
+  'amount'
+];
+
+const moreFilters =
+  reportType === 'item'
+    ? []
+    : availableFilters.filter(f =>
+        // NOT already visible in top bar
+        !visibleFilters.some(vf => vf.id === f.id)
+
+        // NOT already dropped
+        && !droppedFilters.some(df => df.id === f.id)
+      );
 
   const sidebarIcons = [
     'ri:home-smile-2-line', 'proicons:person', 'streamline:transfer-van', 'pajamas:package',
