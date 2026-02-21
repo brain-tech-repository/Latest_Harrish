@@ -14,6 +14,7 @@ import Loading from './Loading'
 import toInternationalNumber from '../(private)/utils/formatNumber';
 import PhpLineChart from './PhpLineChart';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // Define TypeScript interfaces
 interface FilterChildItem {
@@ -392,10 +393,10 @@ const SalesReportDashboard = (props: SalesReportDashboardProps) => {
             groupRes,
             materialRes
           ] = await Promise.all([
-            fetch("http://165.227.64.72/mpldev/index.php/api/get_region_dashboard"),
-            fetch("http://165.227.64.72/mpldev/index.php/api/get_matbrands_dashboard"),
-            fetch("http://165.227.64.72/mpldev/index.php/api/get_matgroups_dashboard"),
-            fetch("http://165.227.64.72/mpldev/index.php/api/get_materials_dashboard")
+            fetch(`${API_BASE}/get_region_dashboard`),
+            fetch(`${API_BASE}/get_matbrands_dashboard`),
+            fetch(`${API_BASE}/get_matgroups_dashboard`),
+            fetch(`${API_BASE}/get_materials_dashboard`)
           ]);
 
           const regionData = (await regionRes.json())?.Result || [];
@@ -1579,21 +1580,21 @@ const SalesReportDashboard = (props: SalesReportDashboardProps) => {
   // const searchtype = availableFilters.filter(f => ['display-quantity', 'amount'].includes(f.id));
   // Show all moreFilters, but mark 'customer' as disabled unless 'channel-categories' or 'customer-category' is dropped
   const isCustomerEnabled = droppedFilters.some(f => f.id === 'channel-categories' || f.id === 'customer-category');
-const baseHiddenFilters = [
-  'company',
-  'region',
-  'area',
-  'warehouse',
-  'salesman',
-  'route',
-  'display-quantity',
-  'amount'
-];
+  const baseHiddenFilters = [
+    'company',
+    'region',
+    'area',
+    'warehouse',
+    'salesman',
+    'route',
+    'display-quantity',
+    'amount'
+  ];
 
-const moreFilters =
-  reportType === 'item'
-    ? []
-    : availableFilters.filter(f =>
+  const moreFilters =
+    reportType === 'item'
+      ? []
+      : availableFilters.filter(f =>
         // NOT already visible in top bar
         !visibleFilters.some(vf => vf.id === f.id)
 
