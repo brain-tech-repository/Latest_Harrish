@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Providers from "./providers/react-query";
 
 import { SnackbarProvider } from "./services/snackbarContext";
 import { CountryFlagPolyfill } from "./emojis";
 import { ThemeProvider } from "./contexts/themeContext";
 import ThemePaletteModal from "./components/ThemePaletteModal";
 import "./globals.css";
+import { Toaster } from "sonner";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -30,7 +32,8 @@ export default function RootLayout({
           {/* <ThemePaletteModal /> */}
           {/* <LoadingProvider> */}
           <SnackbarProvider>
-            {children}
+            <Toaster/>
+        <Providers>{children}</Providers> 
           </SnackbarProvider>
           {/* </LoadingProvider> */}
         </ThemeProvider>

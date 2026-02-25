@@ -675,6 +675,13 @@ export const initialLinkData: SidebarDataType[] = lowercaseHrefs([
           },
            {
             isActive: false,
+            href: "/php-dashboard",
+            label: "Latest Dashboard Compare With Php",
+            leadingIcon: "lucide:map-pin",
+            iconColor: "text-cyan-500",
+          },
+           {
+            isActive: false,
             href: "/pythondashboard",
             label: "Dashboard Compare With Python",
             leadingIcon: "lucide:map-pin",
