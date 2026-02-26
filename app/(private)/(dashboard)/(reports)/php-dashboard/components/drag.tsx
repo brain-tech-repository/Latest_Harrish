@@ -1,5 +1,4 @@
 "use client"
-
 import React, { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,7 +22,6 @@ import {
   Building2,
   Route,
   Store,
-  User,
   Tag,
   Layers,
   Package,
@@ -58,7 +56,6 @@ const iconMap: Record<string, React.ReactNode> = {
   mat_brand: <Tag className="h-4 w-4" />,
   mat_group: <Layers className="h-4 w-4" />,
   material: <Package className="h-4 w-4" />,
-
   /* Optional future filters */
   branch: <Building2 className="h-4 w-4" />,
   date: <Calendar className="h-4 w-4" />,
@@ -146,10 +143,13 @@ export default function SalesReportDragFilters({
   /* ================= SHOW MORE LOGIC ================= */
   const visibleCount = 5
   const hasOverflow = filters.length > visibleCount
-  const visibleFilters = showAll
-    ? filters
-    : filters.slice(0, visibleCount)
+  const filteredFilters = filters.filter(
+    (filter) => !dropped.includes(filter.id)
+  )
 
+  const visibleFilters = showAll
+    ? filteredFilters
+    : filteredFilters.slice(0, visibleCount)
   return (
     <div className="space-y-4">
 
@@ -180,10 +180,10 @@ export default function SalesReportDragFilters({
                   handleDragStart(filter.id, e)
                 }
                 className={`
-                  flex items-center gap-2 px-4 py-2 border rounded-md
+                  flex items-center gap-2 px-4 py-2 border-gray-50 rounded-md
                   transition-all duration-200 select-none min-w-[140px]
                   ${isDisabled
-                    ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200"
+                    ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-100"
                     : "cursor-grab bg-white text-gray-700 border-gray-300 hover:shadow-md hover:border-green-400 active:cursor-grabbing"}
                 `}
               >
@@ -196,34 +196,63 @@ export default function SalesReportDragFilters({
               </div>
             )
           })}
-
           {/* MORE BUTTON */}
           {hasOverflow && (
-            <div
-              onClick={() => setShowAll(!showAll)}
-              className="
-      flex items-center gap-2
-      px-4 py-2
-      border
-      rounded-md
-      transition-all duration-200
-      select-none
-      min-w-[140px]
-      justify-center
-      cursor-pointer
-      bg-white text-gray-700 border-gray-300
-      hover:shadow-md hover:border-green-400
-    "
-            >
-              <Plus className="h-4 w-4 text-gray-600" />
-              <span className="text-sm font-medium">
-                {showAll
-                  ? "Show Less"
-                  : `+${filters.length - visibleCount} More`}
-              </span>
-            </div>
-          )}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="min-w-[140px] justify-center"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  +{filteredFilters.length - visibleCount} More
+                </Button>
+              </PopoverTrigger>
 
+              <PopoverContent className="w-[260px] p-2">
+                <div className="space-y-2">
+
+                  {filteredFilters.slice(visibleCount).map((filter) => {
+                    const isDisabled =
+                      filter.dependsOn &&
+                      !selected[filter.dependsOn]?.length
+
+                    return (
+                      <div
+                        key={filter.id}
+                        draggable={!isDisabled}
+                        onDragStart={(e) =>
+                          !isDisabled &&
+                          handleDragStart(filter.id, e)
+                        }
+                        className={`
+                flex items-center justify-between
+                px-3 py-2 border border-gray-300 rounded-md
+                transition-all duration-200
+                select-none text-sm
+                ${isDisabled
+                            ? "opacity-40 cursor-not-allowed bg-gray-100 text-gray-400"
+                            : "cursor-grab bg-white hover:border-green-400 hover:shadow-sm active:cursor-grabbing"}
+              `}
+                      >
+                        <div className="flex items-center gap-2">
+                          {iconMap[filter.id] || (
+                            <Filter className="h-4 w-4 text-gray-500" />
+                          )}
+                          {filter.name}
+                        </div>
+
+                        <Badge className="bg-gray-100 text-gray-600 border border-gray-200">
+                          {selected[filter.id]?.length || 0}
+                        </Badge>
+                      </div>
+                    )
+                  })}
+
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       </div>
 
@@ -247,7 +276,6 @@ export default function SalesReportDragFilters({
 
         {dropped.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
-
             {dropped.map((id) => {
               const filter = filters.find((f) => f.id === id)
               if (!filter) return null

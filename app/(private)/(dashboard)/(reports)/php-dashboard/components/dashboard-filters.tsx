@@ -59,13 +59,13 @@ export default function SalesReportFilters({
   };
 
   return (
-    <div className="flex flex-wrap items-end justify-between gap-6 px-4 py-3 rounded-lg">
+    <div className="flex flex-wrap items-end justify-between gap-6  py-3 rounded-lg">
 
       {/* LEFT SIDE */}
       <div className="flex flex-wrap items-end gap-6">
 
         {/* Custom Date Range Picker */}
-        <div className="w-[280px]">
+        <div className="w-[250px]">
           <DateRangePicker
             value={`${formatToInput(fromDate)}|${formatToInput(toDate)}`}
             onChange={handleDateChange}

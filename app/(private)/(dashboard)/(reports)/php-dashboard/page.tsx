@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useState, useCallback } from "react"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
-import { BarChart2, TableIcon } from "lucide-react"
+import { BarChart2, Download, Package, TableIcon } from "lucide-react"
 
 import {
   useRegions,
@@ -26,6 +26,8 @@ import SalesReportDragFilters, {
 } from "./components/drag"
 import SalesReportTable from "./components/table"
 import SalesReportGraph from "./components/graph"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
 
 export default function SalesReportDashboard() {
 
@@ -141,9 +143,59 @@ export default function SalesReportDashboard() {
         {/* ================= FILTER SECTION ================= */}
         <Card className="border border-gray-200/80 shadow-sm bg-white rounded-xl">
           <CardHeader className="border-b border-gray-200 p-4">
-            <CardTitle className="text-lg font-semibold">
-              Filters & Report
-            </CardTitle>
+            <div className="flex items-center justify-between w-full">
+
+              <CardTitle className="text-lg font-semibold">
+                Filters & Report
+              </CardTitle>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="justify-between min-w-[120px]"
+                  >
+                    <div className="flex items-center gap-2">
+
+                      Exports
+                      <Download className="h-4 w-4" />
+                    </div>
+                  </Button>
+                </PopoverTrigger>
+
+                <PopoverContent className="w-[220px] p-2">
+                  <Command>
+                    <CommandList>
+                      <CommandGroup>
+
+                        <CommandItem
+                          onSelect={() => console.log("Export PDF")}
+                          className="flex justify-between"
+                        >
+                          Export as PDF
+                        </CommandItem>
+
+                        <CommandItem
+                          onSelect={() => console.log("Export Excel")}
+                          className="flex justify-between"
+                        >
+                          Export as Excel
+                        </CommandItem>
+
+                        <CommandItem
+                          onSelect={() => console.log("Export CSV")}
+                          className="flex justify-between"
+                        >
+                          Export as CSV
+                        </CommandItem>
+
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+            </div>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
             <SalesReportDragFilters
@@ -162,7 +214,6 @@ export default function SalesReportDashboard() {
                   data={tableData}
                   reportType={reportType}
                   totalCount={tableData?.Count}
-                  
                 />
               )}
 
@@ -176,10 +227,7 @@ export default function SalesReportDashboard() {
           </CardContent>
         </Card>
 
-        {/* ================= RESULT SECTION ================= */}
-        {/* <Card className="border border-gray-200/80 shadow-sm bg-white rounded-xl">
-         
-        </Card> */}
+      
 
       </div>
     </>
