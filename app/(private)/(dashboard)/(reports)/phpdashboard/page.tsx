@@ -1,6 +1,5 @@
 "use client"
 import SalesReportDashboard from '@/app/components/drag'
-import React from 'react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 const page = () => {
