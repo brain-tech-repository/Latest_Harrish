@@ -101,20 +101,20 @@ export default function TopBar({
             <div className="w-full h-[60px] flex">
                 {/* Logo on horizontal sidebar */}
                 {horizontalSidebar && (
-                    <div className="w-[230px] px-[16px] py-[14px] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+                    <div className="w-[230px] px-[16px] py-[14px] bg-black border-b border-gray-800">
                         <Logo width={128} height={35} />
                     </div>
                 )}
 
                 {/* Top bar main content */}
-                <div className="w-full h-full px-[16px] py-[14px] flex justify-between items-center gap-1 sm:gap-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+                <div className="w-full h-full px-[16px] py-[14px] flex justify-between items-center gap-1 sm:gap-0 bg-black border-b border-gray-800">
                     <div className="flex items-center gap-[20px]">
                         {!horizontalSidebar && (
                             <Icon
                                 icon={isOpen ? "heroicons-outline:x-mark" : "heroicons-outline:menu-alt-1"}
                                 width={24}
                                 onClick={toggleOpen}
-                                className="cursor-pointer text-primary"
+                               className="cursor-pointer text-white"
                             />
                         )}
                         <div className="w-full hidden sm:w-[320px] sm:block">

@@ -13,7 +13,7 @@ export default function Logo({
 }) {
     return (
         <Image
-            src={type === "full" ? "/logo.png" : "/shortlogoo.png"}
+            src={type === "full" ? "/logo.svg" : "/shortlogoo.png"}
             alt="Login Illustration"
             width={width}
             height={height}

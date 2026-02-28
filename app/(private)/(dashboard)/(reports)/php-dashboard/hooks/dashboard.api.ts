@@ -1,108 +1,139 @@
-
-
 import api from "@/lib/apiClients"
-import { ApiResponse, DropdownOption, SalesDashboardPayload } from "../index/dashboard.types"
-import { useMutation, useQuery, UseQueryResult } from "@tanstack/react-query"
-import { toast } from "sonner"
+import {
+  ApiResponse,
+  DropdownOption,
+  SalesDashboardPayload,
+  SalesDashboardResponse,
+} from "../index/dashboard.types"
 
+import {
+  useMutation,
+  useQuery,
+  UseQueryResult,
+} from "@tanstack/react-query"
+import { toast } from "sonner"
 
 const BASE = "/mpldev/index.php/api"
 
+/* =====================================================
+   API METHODS
+===================================================== */
 
 export const dashboardAPI = {
+  /* ================= DROPDOWNS ================= */
+
   getRegions: async (): Promise<DropdownOption[]> => {
-    const res = await api.get<ApiResponse<DropdownOption>>(
+    const res = await api.get<ApiResponse<DropdownOption[]>>(
       `${BASE}/get_region_dashboard`
     )
     return res.data.Result
   },
 
-  getSubRegions: async (ids: string) => {
+  getSubRegions: async (ids: string): Promise<DropdownOption[]> => {
     if (!ids) return []
-    const res = await api.get<ApiResponse<DropdownOption>>(
+    const res = await api.get<ApiResponse<DropdownOption[]>>(
       `${BASE}/get_sub_region_dashboard/${ids}`
     )
     return res.data.Result
   },
 
-  getWarehouses: async (ids: string) => {
+  getWarehouses: async (ids: string): Promise<DropdownOption[]> => {
     if (!ids) return []
-    const res = await api.get<ApiResponse<DropdownOption>>(
+    const res = await api.get<ApiResponse<DropdownOption[]>>(
       `${BASE}/get_warehouse_dashboard/${ids}`
     )
     return res.data.Result
   },
 
-  getRoutes: async (ids: string) => {
+  getRoutes: async (ids: string): Promise<DropdownOption[]> => {
     if (!ids) return []
-    const res = await api.get<ApiResponse<DropdownOption>>(
+    const res = await api.get<ApiResponse<DropdownOption[]>>(
       `${BASE}/get_route_dashboard/${ids}`
     )
     return res.data.Result
   },
 
-  getTrading: async (ids: string) => {
+  getTrading: async (ids: string): Promise<DropdownOption[]> => {
     if (!ids) return []
-    const res = await api.get<ApiResponse<DropdownOption>>(
+    const res = await api.get<ApiResponse<DropdownOption[]>>(
       `${BASE}/get_trading_dashboard/${ids}`
     )
     return res.data.Result
   },
 
-  getCustomers: async (ids: string) => {
+  getCustomers: async (ids: string): Promise<DropdownOption[]> => {
     if (!ids) return []
-    const res = await api.get<ApiResponse<DropdownOption>>(
+    const res = await api.get<ApiResponse<DropdownOption[]>>(
       `${BASE}/get_customer_dashboard/${ids}`
     )
     return res.data.Result
   },
 
-getTableData: async (payload: SalesDashboardPayload) => {
-  const res = await api.post(
-    `${BASE}/get_sales_dashboard_data`,
-    payload
-  )
-  return res.data   // ✅ return full response
-},
-
   getMatBrands: async (): Promise<DropdownOption[]> => {
-  const res = await api.get<ApiResponse<DropdownOption>>(
-    `${BASE}/get_matbrands_dashboard`
-  )
-  return res.data.Result
-},
+    const res = await api.get<ApiResponse<DropdownOption[]>>(
+      `${BASE}/get_matbrands_dashboard`
+    )
+    return res.data.Result
+  },
 
-getMatGroups: async (): Promise<DropdownOption[]> => {
-  const res = await api.get<ApiResponse<DropdownOption>>(
-    `${BASE}/get_matgroups_dashboard`
-  )
-  return res.data.Result
-},
+  getMatGroups: async (): Promise<DropdownOption[]> => {
+    const res = await api.get<ApiResponse<DropdownOption[]>>(
+      `${BASE}/get_matgroups_dashboard`
+    )
+    return res.data.Result
+  },
 
-getMaterials: async (): Promise<DropdownOption[]> => {
-  const res = await api.get<ApiResponse<DropdownOption>>(
-    `${BASE}/get_materials_dashboard`
-  )
-  return res.data.Result
-},
-getGraphData: async (payload: SalesDashboardPayload) => {
-  const res = await api.post(
-    `${BASE}/get_sales_dashboard_data`, // 👈 NEW GRAPH API
-    payload
-  )
-  return res.data
-},
+  getMaterials: async (): Promise<DropdownOption[]> => {
+    const res = await api.get<ApiResponse<DropdownOption[]>>(
+      `${BASE}/get_materials_dashboard`
+    )
+    return res.data.Result
+  },
+
+  /* ================= TABLE DATA ================= */
+
+  getTableData: async (
+    payload: SalesDashboardPayload
+  ): Promise<SalesDashboardResponse> => {
+    const res = await api.get<SalesDashboardResponse>(
+      `${BASE}/get_sales_dashboard_data`,
+      {
+        params: payload, // server-side pagination params
+      }
+    )
+
+    if (res.data.API_Status !== 1) {
+      throw new Error(res.data.Message || "Failed to load data")
+    }
+
+    return res.data
+  },
+
+  /* ================= GRAPH DATA ================= */
+
+  getGraphData: async (
+    payload: SalesDashboardPayload
+  ): Promise<SalesDashboardResponse> => {
+    const res = await api.get<SalesDashboardResponse>(
+      `${BASE}/get_sales_dashboard_data`,
+      {
+        params: payload,
+      }
+    )
+
+    if (res.data.API_Status !== 1) {
+      throw new Error(res.data.Message || "Failed to load graph data")
+    }
+
+    return res.data
+  },
 }
 
-
-
-/* ===========================
+/* =====================================================
    DROPDOWN HOOKS
-=========================== */
+===================================================== */
 
-export function useRegions(): UseQueryResult<
-  DropdownOption[]
-> {
+export function useRegions(): UseQueryResult<DropdownOption[]> {
   return useQuery({
     queryKey: ["regions"],
     queryFn: dashboardAPI.getRegions,
@@ -149,24 +180,6 @@ export function useCustomers(ids: string) {
   })
 }
 
-/* ===========================
-   TABLE HOOK
-=========================== */
-
-export function useSalesDashboard() {
-  return useMutation({
-    mutationFn: (payload: SalesDashboardPayload) =>
-      dashboardAPI.getTableData(payload),
-
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message ||
-          "Failed to load dashboard"
-      )
-    },
-  })
-}
-
 export function useMatBrands() {
   return useQuery({
     queryKey: ["matBrands"],
@@ -188,16 +201,36 @@ export function useMaterials() {
   })
 }
 
+/* =====================================================
+   TABLE HOOK (SERVER PAGINATION)
+===================================================== */
+
+export function useSalesDashboard(
+  payload: SalesDashboardPayload,
+  enabled: boolean
+) {
+  return useQuery<SalesDashboardResponse>({
+    queryKey: ["salesDashboard", payload],
+    queryFn: () => dashboardAPI.getTableData(payload),
+    placeholderData: (prev) => prev,
+    enabled,
+  })
+}
+/* =====================================================
+   GRAPH HOOK
+===================================================== */
+
 export function useSalesDashboardGraph() {
-  return useMutation({
-    mutationFn: (payload: SalesDashboardPayload) =>
+  return useMutation<
+    SalesDashboardResponse,
+    Error,
+    SalesDashboardPayload
+  >({
+    mutationFn: (payload) =>
       dashboardAPI.getGraphData(payload),
 
-    onError: (error: any) => {
-      toast.error(
-        error?.response?.data?.message ||
-        "Failed to load graph data"
-      )
+    onError: (error) => {
+      toast.error(error.message || "Failed to load graph data")
     },
   })
 }

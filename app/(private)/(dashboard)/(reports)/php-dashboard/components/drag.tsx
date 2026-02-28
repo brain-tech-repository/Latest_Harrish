@@ -154,7 +154,7 @@ export default function SalesReportDragFilters({
     <div className="space-y-4">
 
       {/* ================= HEADER SECTION ================= */}
-      <div className="flex flex-col md:flex-row md:items-start gap-4 bg-gray-300/30 py-3 px-4 rounded-lg">
+      <div className="flex flex-col md:flex-row md:items-start gap-4 bg-gray-300/30 py-3 px-2 rounded-lg">
 
         {/* TITLE COLUMN */}
         <div className="min-w-[180px]">

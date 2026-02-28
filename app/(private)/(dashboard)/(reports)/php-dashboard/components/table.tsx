@@ -17,6 +17,8 @@ interface Props {
   loading: boolean
   totalCount?: number
   showHeader?: boolean   // 👈 add this
+   page: number                // ✅ add
+  setPage: (page: number) => void  // ✅ add
 }
 
 export default function SalesReportTable({
@@ -24,10 +26,16 @@ export default function SalesReportTable({
   loading,
   totalCount,
   showHeader = false,
+   page,
+  setPage,
 }: Props) {
-  const [page, setPage] = useState(1)
+
   const [search] = useState("")
-  const pageSize = 10
+
+  const totalPages = totalCount
+  ? Math.ceil(totalCount / 10)
+  : 1
+
 
   const rows = useMemo(() => {
     if (Array.isArray(data?.Result?.details_wiase_data)) {
@@ -51,16 +59,13 @@ export default function SalesReportTable({
     )
   }, [rows, search])
 
-  const totalPages = Math.ceil(filteredData.length / pageSize)
 
-  const paginatedData = filteredData.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  )
 
-  useEffect(() => {
-    setPage(1)
-  }, [rows])
+
+
+  // useEffect(() => {
+  //   setPage(1)
+  // }, [rows])
 
   /* ================= LOADING ================= */
 
@@ -151,7 +156,7 @@ export default function SalesReportTable({
 
           {/* BODY */}
           <TableBody>
-            {paginatedData.map((row: any, index: number) => (
+            {rows.map((row: any, index: number) => (
               <TableRow
                 key={index}
                 className="border-b border-gray-300/30 hover:bg-gray-50 transition-colors"
@@ -202,31 +207,31 @@ export default function SalesReportTable({
       </div>
 
       {/* PAGINATION */}
-      {totalPages > 1 && (
-        <div className="flex justify-end gap-3 items-center">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page === 1}
-            onClick={() => setPage((prev) => prev - 1)}
-          >
-            Previous
-          </Button>
+     {totalPages > 1 && (
+  <div className="flex justify-end gap-3 items-center">
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={page === 1}
+      onClick={() => setPage(page - 1)}
+    >
+      Previous
+    </Button>
 
-          <span className="text-sm text-gray-600">
-            Page {page} of {totalPages}
-          </span>
+    <span className="text-sm text-gray-600">
+      Page {page} of {totalPages}
+    </span>
 
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page === totalPages}
-            onClick={() => setPage((prev) => prev + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      )}
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={page === totalPages}
+      onClick={() => setPage(page + 1)}
+    >
+      Next
+    </Button>
+  </div>
+)}
     </div>
   )
 }

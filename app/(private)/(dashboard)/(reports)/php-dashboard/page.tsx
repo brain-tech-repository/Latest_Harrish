@@ -1,10 +1,10 @@
 "use client"
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
-import { BarChart2, Download, Package, TableIcon } from "lucide-react"
+import { Download } from "lucide-react"
+import { useMemo } from "react"
 
 import {
   useRegions,
@@ -34,20 +34,25 @@ export default function SalesReportDashboard() {
   /* ================= STATE ================= */
 
   const [view, setView] = useState<"table" | "graph">("table")
+  // const [submitted, setSubmitted] = useState(false)
 
   const [fromDate, setFromDate] = useState<Date>()
   const [toDate, setToDate] = useState<Date>()
   const [reportType, setReportType] = useState("2")
+
   const [dropped, setDropped] = useState<string[]>([])
   const [selected, setSelected] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
+
+  const [page, setPage] = useState(1)
+  const perPage = 10
 
   const joinIds = useCallback(
     (ids?: string[]) => (ids?.length ? ids.join(",") : ""),
     []
   )
 
-  /* ================= API HOOKS ================= */
+  /* ================= DROPDOWN DATA ================= */
 
   const { data: regions } = useRegions()
   const { data: subRegions } = useSubRegions(joinIds(selected.region))
@@ -59,18 +64,6 @@ export default function SalesReportDashboard() {
   const { data: matBrands } = useMatBrands()
   const { data: matGroups } = useMatGroups()
   const { data: materials } = useMaterials()
-
-  const {
-    mutate: fetchTableData,
-    isPending: tableLoading,
-    data: tableData,
-  } = useSalesDashboard()
-
-  const {
-    mutate: fetchGraphData,
-    isPending: graphLoading,
-    data: graphData,
-  } = useSalesDashboardGraph()
 
   /* ================= FILTER CONFIG ================= */
 
@@ -86,6 +79,18 @@ export default function SalesReportDashboard() {
     { id: "material", name: "Material", data: materials, field: "material_name", dependsOn: null },
   ]
 
+  const FILTER_KEY_MAP: Record<string, string> = {
+    region: "region_id",
+    sub_region: "sub_region_id",
+    warehouse: "warehouse_id",
+    route: "route_id",
+    trading: "trading_center_id",
+    customer: "customer_id",
+    mat_brand: "brand_id",
+    mat_group: "material_group_id",
+    material: "material_id",
+  }
+
   /* ================= BUILD PAYLOAD ================= */
 
   const buildPayload = useCallback(() => {
@@ -93,30 +98,62 @@ export default function SalesReportDashboard() {
       fromdate: fromDate ? format(fromDate, "yyyy-MM-dd") : "",
       todate: toDate ? format(toDate, "yyyy-MM-dd") : "",
       report_type: reportType,
+      page,
+      per_page: perPage,
     }
 
-    Object.keys(selected).forEach((key) => {
-      payload[`${key}_id`] = joinIds(selected[key])
+    FILTER_CONFIG.forEach((filter) => {
+      const apiKey = FILTER_KEY_MAP[filter.id]
+      payload[apiKey] = selected[filter.id]
+        ? joinIds(selected[filter.id])
+        : ""
     })
 
     return payload
-  }, [fromDate, toDate, reportType, selected, joinIds])
+  }, [fromDate, toDate, reportType, selected, joinIds, page])
+
+  const payload = useMemo(() => buildPayload(), [buildPayload])
+
+  useEffect(() => {
+  setTableEnabled(false)
+}, [fromDate, toDate, reportType, selected])
+  const [tableEnabled, setTableEnabled] = useState(false)
+
+  /* ================= TABLE QUERY ================= */
+
+  const shouldFetchTable =
+    view === "table" &&
+    fromDate &&
+    toDate
+
+const {
+  data: tableData,
+  isLoading,
+  isFetching,
+} = useSalesDashboard(payload, tableEnabled)
+
+  const tableLoading = isLoading || isFetching
+
+  /* ================= GRAPH MUTATION ================= */
+
+  const {
+    mutate: fetchGraphData,
+    isPending: graphLoading,
+    data: graphData,
+  } = useSalesDashboardGraph()
 
   /* ================= UI ================= */
 
   return (
-
     <>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-2xl font-semibold">
-          Sales Report Dashboard
+          Sales Dashboard
         </CardTitle>
       </CardHeader>
 
       <div className="p-6 space-y-6 bg-gray-50 min-h-screen pt-0 mt-0">
-        {/* ================= HEADER ================= */}
-        {/* <Card className="border border-gray-200/80 shadow-sm bg-white rounded-xl">
-          <CardContent className="p-6 space-y-6"> */}
+
         <SalesReportFilters
           fromDate={fromDate}
           toDate={toDate}
@@ -128,28 +165,26 @@ export default function SalesReportDashboard() {
           view={view}
           setView={setView}
           onSubmit={(type) => {
-            const payload = buildPayload()
-            if (type === "table") {
-              setView("table")
-              fetchTableData(payload)
-            }
+            setPage(1)
+
+        if (type === "table") {
+  setView("table")
+  setTableEnabled(true)   // ✅ enable query
+}
+
             if (type === "graph") {
               setView("graph")
-              fetchGraphData(payload)
+              fetchGraphData(buildPayload())
             }
-          }}
-        />
-        {/* </CardContent>
-            </Card> */}
+          }} />
 
-
-        {/* ================= FILTER SECTION ================= */}
         <Card className="border border-gray-200/80 shadow-sm bg-white rounded-xl">
           <CardHeader className="border-b border-gray-200 p-4">
             <div className="flex items-center justify-between w-full">
               <CardTitle className="text-lg font-semibold">
                 Filters & Report
               </CardTitle>
+
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -166,25 +201,9 @@ export default function SalesReportDashboard() {
                   <Command>
                     <CommandList>
                       <CommandGroup>
-                        <CommandItem
-                          onSelect={() => console.log("Export PDF")}
-                          className="flex justify-between"
-                        >
-                          Export as PDF
-                        </CommandItem>
-
-                        <CommandItem
-                          onSelect={() => console.log("Export Excel")}
-                          className="flex justify-between"
-                        >
-                          Export as Excel
-                        </CommandItem>
-                        <CommandItem
-                          onSelect={() => console.log("Export CSV")}
-                          className="flex justify-between"
-                        >
-                          Export as CSV
-                        </CommandItem>
+                        <CommandItem>Export as PDF</CommandItem>
+                        <CommandItem>Export as Excel</CommandItem>
+                        <CommandItem>Export as CSV</CommandItem>
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -192,7 +211,8 @@ export default function SalesReportDashboard() {
               </Popover>
             </div>
           </CardHeader>
-          <CardContent className=" space-y-6">
+
+          <CardContent className="space-y-6">
             <SalesReportDragFilters
               filters={FILTER_CONFIG}
               dropped={dropped}
@@ -202,13 +222,17 @@ export default function SalesReportDashboard() {
               setDropped={setDropped}
               setSelected={setSelected}
             />
-            <CardContent className="">
+
+            <CardContent>
               {view === "table" && (
                 <SalesReportTable
                   loading={tableLoading}
                   data={tableData}
                   reportType={reportType}
-                  totalCount={tableData?.Count}
+                  page={page}
+                  setPage={setPage}
+                  showHeader={true}
+                  totalCount={tableData?.Pagination?.last_page}
                 />
               )}
 
@@ -219,6 +243,7 @@ export default function SalesReportDashboard() {
                 />
               )}
             </CardContent>
+
           </CardContent>
         </Card>
       </div>
