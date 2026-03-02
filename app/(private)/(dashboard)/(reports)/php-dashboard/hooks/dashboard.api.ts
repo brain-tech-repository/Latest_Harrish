@@ -127,6 +127,23 @@ export const dashboardAPI = {
 
     return res.data
   },
+
+  exportSalesData: async (
+    payload: SalesDashboardPayload & { timeframe: string }
+  ): Promise<Blob> => {
+    const res = await api.get(
+      `${BASE}/export_sales_data`,
+      {
+        params: {
+          ...payload,
+          timeframe: payload.timeframe, // daily | weekly | monthly | yearly
+        },
+        responseType: "blob", // IMPORTANT for file download
+      }
+    )
+
+    return res.data
+  },
 }
 
 /* =====================================================
@@ -231,6 +248,26 @@ export function useSalesDashboardGraph() {
 
     onError: (error) => {
       toast.error(error.message || "Failed to load graph data")
+    },
+  })
+}
+
+
+/* =====================================================
+   EXPORT HOOK
+===================================================== */
+
+export function useExportSalesData() {
+  return useMutation<
+    Blob,
+    Error,
+    SalesDashboardPayload & { timeframe: string }
+  >({
+    mutationFn: (payload) =>
+      dashboardAPI.exportSalesData(payload),
+
+    onError: (error) => {
+      toast.error(error.message || "Export failed")
     },
   })
 }

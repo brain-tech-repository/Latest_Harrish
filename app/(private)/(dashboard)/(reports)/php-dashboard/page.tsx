@@ -5,7 +5,6 @@ import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Download } from "lucide-react"
 import { useMemo } from "react"
-
 import {
   useRegions,
   useSubRegions,
@@ -19,7 +18,6 @@ import {
   useSalesDashboard,
   useSalesDashboardGraph,
 } from "./hooks/dashboard.api"
-
 import SalesReportFilters from "./components/dashboard-filters"
 import SalesReportDragFilters, {
   FilterConfig,
@@ -28,6 +26,8 @@ import SalesReportTable from "./components/table"
 import SalesReportGraph from "./components/graph-model/graph"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command"
+import { useExportSalesData } from "./hooks/dashboard.api"
+import { toast } from "sonner"
 
 export default function SalesReportDashboard() {
 
@@ -35,15 +35,12 @@ export default function SalesReportDashboard() {
 
   const [view, setView] = useState<"table" | "graph">("table")
   // const [submitted, setSubmitted] = useState(false)
-
   const [fromDate, setFromDate] = useState<Date>()
   const [toDate, setToDate] = useState<Date>()
   const [reportType, setReportType] = useState("2")
-
   const [dropped, setDropped] = useState<string[]>([])
   const [selected, setSelected] = useState<Record<string, string[]>>({})
   const [openFilter, setOpenFilter] = useState<string | null>(null)
-
   const [page, setPage] = useState(1)
   const perPage = 10
 
@@ -66,7 +63,6 @@ export default function SalesReportDashboard() {
   const { data: materials } = useMaterials()
 
   /* ================= FILTER CONFIG ================= */
-
   const FILTER_CONFIG: FilterConfig[] = [
     { id: "region", name: "Region", data: regions, field: "region_name", dependsOn: null },
     { id: "sub_region", name: "Sub Region", data: subRegions, field: "sub_region_name", dependsOn: "region" },
@@ -78,7 +74,6 @@ export default function SalesReportDashboard() {
     { id: "mat_group", name: "Material Group", data: matGroups, field: "category_name", dependsOn: null },
     { id: "material", name: "Material", data: materials, field: "material_name", dependsOn: null },
   ]
-
   const FILTER_KEY_MAP: Record<string, string> = {
     region: "region_id",
     sub_region: "sub_region_id",
@@ -108,29 +103,26 @@ export default function SalesReportDashboard() {
         ? joinIds(selected[filter.id])
         : ""
     })
-
     return payload
   }, [fromDate, toDate, reportType, selected, joinIds, page])
 
   const payload = useMemo(() => buildPayload(), [buildPayload])
-
   useEffect(() => {
-  setTableEnabled(false)
-}, [fromDate, toDate, reportType, selected])
+    setTableEnabled(false)
+  }, [fromDate, toDate, reportType, selected])
   const [tableEnabled, setTableEnabled] = useState(false)
 
   /* ================= TABLE QUERY ================= */
-
   const shouldFetchTable =
     view === "table" &&
     fromDate &&
     toDate
 
-const {
-  data: tableData,
-  isLoading,
-  isFetching,
-} = useSalesDashboard(payload, tableEnabled)
+  const {
+    data: tableData,
+    isLoading,
+    isFetching,
+  } = useSalesDashboard(payload, tableEnabled)
 
   const tableLoading = isLoading || isFetching
 
@@ -142,8 +134,43 @@ const {
     data: graphData,
   } = useSalesDashboardGraph()
 
-  /* ================= UI ================= */
+  const { mutate: exportData, isPending: exportLoading } =
+    useExportSalesData()
 
+
+const handleExport = (timeframe: string) => {
+  const exportPayload = {
+    ...buildPayload(),
+    timeframe,
+  }
+
+  const loadingToast = toast.loading("Preparing download...")
+
+  exportData(exportPayload, {
+    onSuccess: (blob) => {
+      // create file url
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `sales_${timeframe}_${Date.now()}.xlsx`
+
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+
+      toast.dismiss(loadingToast)
+      toast.success("Download completed successfully ✅")
+    },
+
+    onError: () => {
+      toast.dismiss(loadingToast)
+      toast.error("Download failed ❌")
+    },
+  })
+}
+
+  /* ================= UI ================= */
   return (
     <>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -167,10 +194,10 @@ const {
           onSubmit={(type) => {
             setPage(1)
 
-        if (type === "table") {
-  setView("table")
-  setTableEnabled(true)   // ✅ enable query
-}
+            if (type === "table") {
+              setView("table")
+              setTableEnabled(true)   // ✅ enable query
+            }
 
             if (type === "graph") {
               setView("graph")
@@ -201,9 +228,21 @@ const {
                   <Command>
                     <CommandList>
                       <CommandGroup>
-                        <CommandItem>Export as PDF</CommandItem>
-                        <CommandItem>Export as Excel</CommandItem>
-                        <CommandItem>Export as CSV</CommandItem>
+                        <CommandItem onSelect={() => handleExport("daily")}>
+                          Export Daily
+                        </CommandItem>
+
+                        <CommandItem onSelect={() => handleExport("weekly")}>
+                          Export Weekly
+                        </CommandItem>
+
+                        <CommandItem onSelect={() => handleExport("monthly")}>
+                          Export Monthly
+                        </CommandItem>
+
+                        <CommandItem onSelect={() => handleExport("yearly")}>
+                          Export Yearly
+                        </CommandItem>
                       </CommandGroup>
                     </CommandList>
                   </Command>
